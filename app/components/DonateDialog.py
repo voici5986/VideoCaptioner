@@ -2,7 +2,7 @@ import os
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QVBoxLayout
+from PyQt5.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout
 from qfluentwidgets import BodyLabel, MessageBoxBase
 
 from app.config import ASSETS_PATH
@@ -29,7 +29,7 @@ class DonateDialog(MessageBoxBase):
             ),
             self,
         )
-        self.descLabel.setAlignment(Qt.AlignCenter)
+        self.descLabel.setAlignment(Qt.AlignCenter)  # type: ignore
 
         # 创建水平布局放置两个二维码
         self.qrLayout = QHBoxLayout()
@@ -39,12 +39,15 @@ class DonateDialog(MessageBoxBase):
         self.alipayQR = QLabel()
         self.alipayQR.setPixmap(
             QPixmap(self.ALIPAY_QR_PATH).scaled(
-                300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                300,
+                300,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.SmoothTransformation,  # type: ignore
             )
         )
         self.alipayLabel = BodyLabel(self.tr("支付宝"))
-        self.alipayLabel.setAlignment(Qt.AlignCenter)
-        self.alipayContainer.addWidget(self.alipayQR, alignment=Qt.AlignCenter)
+        self.alipayLabel.setAlignment(Qt.AlignCenter)  # type: ignore
+        self.alipayContainer.addWidget(self.alipayQR, alignment=Qt.AlignCenter)  # type: ignore
         self.alipayContainer.addWidget(self.alipayLabel)
 
         # 创建微信二维码标签
@@ -52,12 +55,15 @@ class DonateDialog(MessageBoxBase):
         self.wechatQR = QLabel()
         self.wechatQR.setPixmap(
             QPixmap(self.WECHAT_QR_PATH).scaled(
-                300, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                300,
+                300,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.SmoothTransformation,  # type: ignore
             )
         )
         self.wechatLabel = BodyLabel(self.tr("微信"))
-        self.wechatLabel.setAlignment(Qt.AlignCenter)
-        self.wechatContainer.addWidget(self.wechatQR, alignment=Qt.AlignCenter)
+        self.wechatLabel.setAlignment(Qt.AlignCenter)  # type: ignore
+        self.wechatContainer.addWidget(self.wechatQR, alignment=Qt.AlignCenter)  # type: ignore
         self.wechatContainer.addWidget(self.wechatLabel)
 
         # 将二维码添加到水平布局

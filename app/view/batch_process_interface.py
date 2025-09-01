@@ -1,43 +1,42 @@
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QComboBox,
-    QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
-    QProgressBar,
-    QFileDialog,
-    QSizePolicy,
-)
-from PyQt5.QtGui import QDesktopServices, QColor, QFont
-from PyQt5.QtCore import QUrl
-from qfluentwidgets import (
-    ComboBox,
-    PushButton,
-    TableWidget,
-    ProgressBar,
-    InfoBar,
-    InfoBarPosition,
-    RoundMenu,
-    Action,
-    FluentIcon as FIF,
-)
 import os
 
+from PyQt5.QtCore import Qt, QUrl
+from PyQt5.QtGui import QColor, QDesktopServices, QFont
+from PyQt5.QtWidgets import (
+    QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QSizePolicy,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+from qfluentwidgets import (
+    Action,
+    ComboBox,
+    InfoBar,
+    InfoBarPosition,
+    ProgressBar,
+    PushButton,
+    RoundMenu,
+    TableWidget,
+)
+from qfluentwidgets import (
+    FluentIcon as FIF,
+)
+
+from app.core.entities import (
+    BatchTaskStatus,
+    BatchTaskType,
+    SupportedAudioFormats,
+    SupportedSubtitleFormats,
+    SupportedVideoFormats,
+)
 from app.thread.batch_process_thread import (
     BatchProcessThread,
     BatchTask,
-    BatchTaskStatus,
 )
-from app.core.entities import (
-    SupportedAudioFormats,
-    SupportedVideoFormats,
-    SupportedSubtitleFormats,
-)
-from app.core.entities import BatchTaskType, BatchTaskStatus
 
 
 class BatchProcessInterface(QWidget):
@@ -125,7 +124,7 @@ class BatchProcessInterface(QWidget):
         self.batch_thread.task_completed.connect(self.on_task_completed)
 
         # 表格右键菜单
-        self.task_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.task_table.setContextMenuPolicy(Qt.CustomContextMenu)  # type: ignore
         self.task_table.customContextMenuRequested.connect(self.show_context_menu)
 
     def on_add_file_clicked(self):
@@ -195,11 +194,6 @@ class BatchProcessInterface(QWidget):
             is_subtitle = any(
                 first_file.endswith(f".{fmt.value}") for fmt in SupportedSubtitleFormats
             )
-            is_media = any(
-                first_file.endswith(f".{fmt.value}") for fmt in SupportedAudioFormats
-            ) or any(
-                first_file.endswith(f".{fmt.value}") for fmt in SupportedVideoFormats
-            )
             if is_subtitle:
                 self.task_type_combo.setCurrentText(str(BatchTaskType.SUBTITLE))
                 task_type = BatchTaskType.SUBTITLE
@@ -213,7 +207,7 @@ class BatchProcessInterface(QWidget):
         if not valid_files:
             InfoBar.warning(
                 title="无效文件",
-                content=f"请选择正确的文件类型",
+                content="请选择正确的文件类型",
                 duration=3000,
                 position=InfoBarPosition.TOP,
                 parent=self,
@@ -228,7 +222,7 @@ class BatchProcessInterface(QWidget):
                     exists = True
                     InfoBar.warning(
                         title="任务已存在",
-                        content=f"任务已存在",
+                        content="任务已存在",
                         duration=2000,
                         position=InfoBarPosition.TOP_RIGHT,
                         parent=self,
@@ -277,8 +271,8 @@ class BatchProcessInterface(QWidget):
 
         # 状态
         status = QTableWidgetItem(str(BatchTaskStatus.WAITING))
-        status.setTextAlignment(Qt.AlignCenter)
-        status.setForeground(Qt.gray)  # 设置字体颜色为灰色
+        status.setTextAlignment(Qt.AlignCenter)  # type: ignore
+        status.setForeground(Qt.gray)  # type: ignore  # 设置字体颜色为灰色
         font = QFont()
         font.setBold(True)
         status.setFont(font)

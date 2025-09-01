@@ -1,11 +1,13 @@
 # app/core/storage/database.py
-import os
 import logging
+import os
 from contextlib import contextmanager
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from .models import Base
+
 from .constants import CACHE_CONFIG
+from .models import Base
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,8 @@ class DatabaseManager:
         if not self._engine or not self._session_maker:
             self.init_db()
 
+        if self._session_maker is None:
+            raise RuntimeError("Database session maker not initialized")
         session = self._session_maker()
         try:
             yield session

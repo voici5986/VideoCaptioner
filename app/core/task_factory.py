@@ -35,7 +35,7 @@ class TaskFactory:
         style_path = SUBTITLE_STYLE_PATH / f"{style_name}.txt"
         if style_path.exists():
             return style_path.read_text(encoding="utf-8")
-        return None
+        return ""
 
     @staticmethod
     def create_transcribe_task(
@@ -67,7 +67,7 @@ class TaskFactory:
             use_asr_cache=cfg.use_asr_cache.value,
             need_word_time_stamp=need_word_time_stamp,
             # Whisper Cpp 配置
-            whisper_model=cfg.whisper_model.value.value,
+            whisper_model=cfg.whisper_model.value,
             # Whisper API 配置
             whisper_api_key=cfg.whisper_api_key.value,
             whisper_api_base=cfg.whisper_api_base.value,
@@ -75,12 +75,12 @@ class TaskFactory:
             whisper_api_prompt=cfg.whisper_api_prompt.value,
             # Faster Whisper 配置
             faster_whisper_program=cfg.faster_whisper_program.value,
-            faster_whisper_model=cfg.faster_whisper_model.value.value,
+            faster_whisper_model=cfg.faster_whisper_model.value,
             faster_whisper_model_dir=str(MODEL_PATH),
             faster_whisper_device=cfg.faster_whisper_device.value,
             faster_whisper_vad_filter=cfg.faster_whisper_vad_filter.value,
             faster_whisper_vad_threshold=cfg.faster_whisper_vad_threshold.value,
-            faster_whisper_vad_method=cfg.faster_whisper_vad_method.value.value,
+            faster_whisper_vad_method=cfg.faster_whisper_vad_method.value,
             faster_whisper_ff_mdx_kim2=cfg.faster_whisper_ff_mdx_kim2.value,
             faster_whisper_one_word=cfg.faster_whisper_one_word.value,
             faster_whisper_prompt=cfg.faster_whisper_prompt.value,
@@ -100,9 +100,7 @@ class TaskFactory:
     ) -> SubtitleTask:
         """创建字幕任务"""
         output_name = (
-            Path(file_path)
-            .stem.replace("【原始字幕】", "")
-            .replace(f"【下载字幕】", "")
+            Path(file_path).stem.replace("【原始字幕】", "").replace("【下载字幕】", "")
         )
         # 只在需要翻译时添加翻译服务后缀
         suffix = (
@@ -171,7 +169,11 @@ class TaskFactory:
             # 翻译服务
             translator_service=cfg.translator_service.value,
             # 字幕处理
-            split_type=split_type,
+            split_type=(
+                SplitTypeEnum.SENTENCE
+                if split_type == "sentence"
+                else SplitTypeEnum.SEMANTIC
+            ),
             need_reflect=cfg.need_reflect_translate.value,
             need_translate=cfg.need_translate.value,
             need_optimize=cfg.need_optimize.value,

@@ -1,4 +1,3 @@
-from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
 from qfluentwidgets import SegmentedWidget
 
@@ -10,7 +9,6 @@ from app.view.video_synthesis_interface import VideoSynthesisInterface
 
 
 class HomeInterface(QWidget):
-
     def __init__(self, parent=None):
         super().__init__(parent)
 

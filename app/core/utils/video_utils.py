@@ -4,10 +4,11 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Dict, Literal, Optional
+from typing import Optional, Callable
+from typing import Dict, Literal
 
-from ..utils.logger import setup_logger
 from ..utils.ass_auto_wrap import auto_wrap_ass_file
+from ..utils.logger import setup_logger
 
 logger = setup_logger("video_utils")
 
@@ -15,9 +16,9 @@ logger = setup_logger("video_utils")
 def video2audio(input_file: str, output: str = "") -> bool:
     """使用ffmpeg将视频转换为音频"""
     # 创建output目录
-    output = Path(output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output = str(output)
+    output_path = Path(output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output = str(output_path)
     cmd = [
         "ffmpeg",
         "-i",
@@ -43,9 +44,7 @@ def video2audio(input_file: str, output: str = "") -> bool:
             encoding="utf-8",
             errors="replace",
             creationflags=(
-                subprocess.CREATE_NO_WINDOW
-                if hasattr(subprocess, "CREATE_NO_WINDOW")
-                else 0
+                getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
             ),
         )
         if result.returncode == 0 and Path(output).is_file():
@@ -68,9 +67,7 @@ def check_cuda_available() -> bool:
             capture_output=True,
             text=True,
             creationflags=(
-                subprocess.CREATE_NO_WINDOW
-                if hasattr(subprocess, "CREATE_NO_WINDOW")
-                else 0
+                getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
             ),
         )
         if "cuda" not in result.stdout.lower():
@@ -82,7 +79,9 @@ def check_cuda_available() -> bool:
             ["ffmpeg", "-hide_banner", "-init_hw_device", "cuda"],
             capture_output=True,
             text=True,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            creationflags=(
+                getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+            ),
         )
 
         # 如果stderr中包含"Cannot load cuda" 或 "Failed to load"等错误信息，说明CUDA不可用
@@ -118,7 +117,7 @@ def add_subtitles(
     ] = "medium",
     vcodec: str = "libx264",
     soft_subtitle: bool = False,
-    progress_callback: callable = None,
+    progress_callback: Optional[Callable] = None,
 ) -> None:
     assert Path(input_file).is_file(), "输入文件不存在"
     assert Path(subtitle_file).is_file(), "字幕文件不存在"
@@ -141,7 +140,6 @@ def add_subtitles(
 
     # 如果是WebM格式，强制使用硬字幕
     if Path(output).suffix.lower() == ".webm":
-
         soft_subtitle = False
         logger.info("WebM格式视频，强制使用硬字幕")
 
@@ -163,16 +161,14 @@ def add_subtitles(
             "-y",
         ]
         logger.info(f"添加软字幕执行命令: {' '.join(cmd)}")
-        result = subprocess.run(
+        subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
             creationflags=(
-                subprocess.CREATE_NO_WINDOW
-                if hasattr(subprocess, "CREATE_NO_WINDOW")
-                else 0
+                getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
             ),
         )
     else:
@@ -224,9 +220,7 @@ def add_subtitles(
                 encoding="utf-8",
                 errors="replace",
                 creationflags=(
-                    subprocess.CREATE_NO_WINDOW
-                    if hasattr(subprocess, "CREATE_NO_WINDOW")
-                    else 0
+                    getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
                 ),
             )
 
@@ -297,9 +291,7 @@ def get_video_info(file_path: str) -> Optional[Dict]:
             encoding="utf-8",
             errors="replace",
             creationflags=(
-                subprocess.CREATE_NO_WINDOW
-                if hasattr(subprocess, "CREATE_NO_WINDOW")
-                else 0
+                getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
             ),
         )
         info = result.stderr

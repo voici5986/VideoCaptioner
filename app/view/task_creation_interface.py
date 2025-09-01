@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
-from pathlib import Path
 from urllib.parse import urlparse
 
 from PyQt5.QtCore import QStandardPaths, Qt, pyqtSignal
@@ -26,17 +25,17 @@ from qfluentwidgets import (
 )
 
 from app.common.config import cfg
+from app.components.DonateDialog import DonateDialog
+from app.components.LanguageSettingDialog import LanguageSettingDialog
 from app.config import APPDATA_PATH, ASSETS_PATH, VERSION
 from app.core.entities import (
     LLMServiceEnum,
     SupportedAudioFormats,
     SupportedVideoFormats,
+    TranscribeModelEnum,
 )
 from app.thread.video_download_thread import VideoDownloadThread
 from app.view.log_window import LogWindow
-from app.components.DonateDialog import DonateDialog
-from app.components.LanguageSettingDialog import LanguageSettingDialog
-from app.core.entities import TranscribeModelEnum
 
 LOGO_PATH = ASSETS_PATH / "logo.png"
 
@@ -54,7 +53,7 @@ class TaskCreationInterface(QWidget):
         self.log_window = None
 
         self.setObjectName("TaskCreationInterface")
-        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setAttribute(Qt.WA_StyledBackground, True)  # type: ignore
         self.setAcceptDrops(True)
 
         self.setup_ui()
@@ -75,11 +74,14 @@ class TaskCreationInterface(QWidget):
         self.logo_label = QLabel(self)
         self.logo_pixmap = QPixmap(str(LOGO_PATH))
         self.logo_pixmap = self.logo_pixmap.scaled(
-            150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation
+            150,
+            150,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.SmoothTransformation,  # type: ignore
         )
 
         self.logo_label.setPixmap(self.logo_pixmap)
-        self.logo_label.setAlignment(Qt.AlignCenter)
+        self.logo_label.setAlignment(Qt.AlignCenter)  # type: ignore
         self.main_layout.addWidget(self.logo_label)
         self.main_layout.addSpacing(10)
 
@@ -137,15 +139,15 @@ class TaskCreationInterface(QWidget):
     def setup_status_layout(self):
         self.status_layout = QVBoxLayout()
         self.status_layout.setContentsMargins(50, 0, 30, 5)
-        self.status_layout.setAlignment(Qt.AlignBottom | Qt.AlignHCenter)
+        self.status_layout.setAlignment(Qt.AlignBottom | Qt.AlignHCenter)  # type: ignore
         self.status_label = BodyLabel(self.tr("准备就绪"), self)
         self.status_label.setStyleSheet("font-size: 14px; color: #888888;")
-        self.status_layout.addWidget(self.status_label, 0, Qt.AlignCenter)
+        self.status_layout.addWidget(self.status_label, 0, Qt.AlignCenter)  # type: ignore
         self.progress_bar = ProgressBar(self)
         self.status_label.hide()
         self.progress_bar.hide()
         self.progress_bar.setFixedWidth(300)
-        self.status_layout.addWidget(self.progress_bar, 0, Qt.AlignCenter)
+        self.status_layout.addWidget(self.progress_bar, 0, Qt.AlignCenter)  # type: ignore
 
         self.main_layout.addStretch(1)
         self.main_layout.addLayout(self.status_layout)
@@ -186,7 +188,7 @@ class TaskCreationInterface(QWidget):
         self.info_label = BodyLabel(
             self.tr(f"©VideoCaptioner {VERSION} • By Weifeng"), self
         )
-        self.info_label.setAlignment(Qt.AlignCenter)
+        self.info_label.setAlignment(Qt.AlignCenter)  # type: ignore
         self.info_label.setStyleSheet("font-size: 12px; color: #888888;")
 
         # 将组件添加到底部布局
@@ -274,7 +276,7 @@ class TaskCreationInterface(QWidget):
                 break
             else:
                 InfoBar.error(
-                    self.tr(f"格式错误") + file_ext,
+                    self.tr("格式错误") + file_ext,
                     self.tr("不支持该文件格式"),
                     duration=3000,
                     parent=self,
@@ -316,7 +318,7 @@ class TaskCreationInterface(QWidget):
             )
 
         # 创建视频下载线程
-        self.video_download_thread = VideoDownloadThread(url, cfg.work_dir.value)
+        self.video_download_thread = VideoDownloadThread(url, str(cfg.work_dir.value))
         self.video_download_thread.finished.connect(self.on_video_download_finished)
         self.video_download_thread.progress.connect(self.on_create_task_progress)
         self.video_download_thread.error.connect(self.on_create_task_error)
@@ -409,8 +411,8 @@ if __name__ == "__main__":
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
-    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
-    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)  # type: ignore
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)  # type: ignore
 
     app = QApplication(sys.argv)
     window = TaskCreationInterface()

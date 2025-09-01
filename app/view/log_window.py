@@ -1,11 +1,9 @@
 import os
-import time
-from pathlib import Path
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QTextCursor
-from PyQt5.QtWidgets import QTextEdit, QVBoxLayout, QWidget, QHBoxLayout
-from qfluentwidgets import Dialog, FluentStyleSheet, TextEdit, isDarkTheme, PushButton
+from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+from qfluentwidgets import FluentStyleSheet, PushButton, TextEdit, isDarkTheme
 
 from app.config import LOG_PATH, RESOURCE_PATH
 
@@ -25,12 +23,12 @@ class LogWindow(QWidget):
             self.setStyleSheet(f.read())
 
         # 设置为非模态对话框
-        self.setWindowModality(Qt.NonModal)
+        self.setWindowModality(Qt.NonModal)  # type: ignore
         # 设置窗口标志
         self.setWindowFlags(
-            Qt.Window  # 让窗口成为独立窗口
-            | Qt.WindowCloseButtonHint  # 添加关闭按钮
-            | Qt.WindowMinMaxButtonsHint  # 添加最小化最大化按钮
+            Qt.Window  # type: ignore  # 让窗口成为独立窗口
+            | Qt.WindowCloseButtonHint  # type: ignore  # 添加关闭按钮
+            | Qt.WindowMinMaxButtonsHint  # type: ignore  # 添加最小化最大化按钮
         )
         # 创建主布局
         layout = QVBoxLayout(self)
@@ -59,7 +57,7 @@ class LogWindow(QWidget):
             self.log_file = open(self.log_path, "r", encoding="utf-8")
             self.load_last_lines(20480)
             self.log_text.moveCursor(QTextCursor.End)
-            self.log_text.insertPlainText(f"\n{'='*25}以上是历史日志{'='*25}\n\n")
+            self.log_text.insertPlainText(f"\n{'=' * 25}以上是历史日志{'=' * 25}\n\n")
         except Exception as e:
             self.log_file = None
             self.log_text.setPlainText(f"打开日志文件失败: {str(e)}")
@@ -157,4 +155,15 @@ class LogWindow(QWidget):
 
     def open_log_folder(self):
         """打开日志文件所在文件夹"""
-        os.startfile(str(LOG_PATH))
+        import platform
+
+        if platform.system() == "Windows":
+            os.startfile(str(LOG_PATH))  # type: ignore
+        elif platform.system() == "Darwin":  # macOS
+            import subprocess
+
+            subprocess.run(["open", str(LOG_PATH)])
+        else:  # Linux
+            import subprocess
+
+            subprocess.run(["xdg-open", str(LOG_PATH)])

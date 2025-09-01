@@ -1,22 +1,20 @@
 import datetime
 import os
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
-from PyQt5.QtCore import QSettings, QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal
 
-from app.common.config import cfg
+from app.config import CACHE_PATH
 from app.core.bk_asr.asr_data import ASRData
 from app.core.entities import SubtitleConfig, SubtitleTask, TranslatorServiceEnum
-from app.core.subtitle_processor.split import SubtitleSplitter
-from app.core.subtitle_processor.summarization import SubtitleSummarizer
+from app.core.storage.cache_manager import ServiceUsageManager
+from app.core.storage.database import DatabaseManager
 from app.core.subtitle_processor.optimize import SubtitleOptimizer
+from app.core.subtitle_processor.split import SubtitleSplitter
 from app.core.subtitle_processor.translate import TranslatorFactory, TranslatorType
 from app.core.utils.logger import setup_logger
 from app.core.utils.test_opanai import test_openai
-from app.core.storage.cache_manager import ServiceUsageManager
-from app.core.storage.database import DatabaseManager
-from app.config import CACHE_PATH
 
 # 配置日志
 logger = setup_logger("subtitle_optimization_thread")
@@ -36,14 +34,15 @@ class SubtitleThread(QThread):
         self.subtitle_length = 0
         self.finished_subtitle_length = 0
         self.custom_prompt_text = ""
+        self.optimizer = None  # Initialize optimizer attribute
         # 初始化数据库和服务使用管理器
-        self.db_manager = DatabaseManager(CACHE_PATH)
+        self.db_manager = DatabaseManager(str(CACHE_PATH))
         self.service_manager = ServiceUsageManager(self.db_manager)
 
     def set_custom_prompt_text(self, text: str):
         self.custom_prompt_text = text
 
-    def _setup_api_config(self) -> SubtitleConfig:
+    def _setup_api_config(self) -> Optional[SubtitleConfig]:
         """设置API配置，返回SubtitleConfig"""
         public_base_url = "https://ddg.bkfeng.top/v1"
         if self.task.subtitle_config.base_url == public_base_url:
@@ -62,10 +61,12 @@ class SubtitleThread(QThread):
             return self.task.subtitle_config
 
         if self.task.subtitle_config.base_url and self.task.subtitle_config.api_key:
+            # Check if model is None and provide a default
+            model = self.task.subtitle_config.llm_model or "gpt-3.5-turbo"
             if not test_openai(
                 self.task.subtitle_config.base_url,
                 self.task.subtitle_config.api_key,
-                self.task.subtitle_config.llm_model,
+                model,
             )[0]:
                 raise Exception(
                     self.tr(
@@ -83,9 +84,11 @@ class SubtitleThread(QThread):
                 )
             )
 
+        return None
+
     def run(self):
         try:
-            logger.info(f"\n===========字幕处理任务开始===========")
+            logger.info("\n===========字幕处理任务开始===========")
             logger.info(f"时间：{datetime.datetime.now()}")
 
             # 字幕文件路径检查、对断句字幕路径进行定义
@@ -113,33 +116,39 @@ class SubtitleThread(QThread):
                 subtitle_config.need_optimize
                 or asr_data.is_word_timestamp()
                 or (
-                    (
-                        subtitle_config.need_translate
-                        and subtitle_config.translator_service
-                        not in [
-                            TranslatorServiceEnum.DEEPLX,
-                            TranslatorServiceEnum.BING,
-                            TranslatorServiceEnum.GOOGLE,
-                        ]
-                    )
+                    subtitle_config.need_translate
+                    and subtitle_config.translator_service
+                    not in [
+                        TranslatorServiceEnum.DEEPLX,
+                        TranslatorServiceEnum.BING,
+                        TranslatorServiceEnum.GOOGLE,
+                    ]
                 )
             ):
                 self.progress.emit(2, self.tr("开始验证API配置..."))
                 subtitle_config = self._setup_api_config()
-                os.environ["OPENAI_BASE_URL"] = subtitle_config.base_url
-                os.environ["OPENAI_API_KEY"] = subtitle_config.api_key
+                if subtitle_config.base_url:
+                    os.environ["OPENAI_BASE_URL"] = subtitle_config.base_url
+                if subtitle_config.api_key:
+                    os.environ["OPENAI_API_KEY"] = subtitle_config.api_key
 
             # 2. 重新断句（对于字词级字幕）
             if asr_data.is_word_timestamp():
                 self.progress.emit(5, self.tr("字幕断句..."))
                 logger.info("正在字幕断句...")
+                if not subtitle_config.llm_model:
+                    raise Exception(self.tr("字幕断句需要配置LLM模型"))
                 splitter = SubtitleSplitter(
                     thread_num=subtitle_config.thread_num,
                     model=subtitle_config.llm_model,
                     temperature=0.3,
                     timeout=60,
                     retry_times=1,
-                    split_type=subtitle_config.split_type,
+                    split_type=(
+                        str(subtitle_config.split_type)
+                        if subtitle_config.split_type
+                        else "SEMANTIC"
+                    ),
                     max_word_count_cjk=subtitle_config.max_word_count_cjk,
                     max_word_count_english=subtitle_config.max_word_count_english,
                 )
@@ -155,14 +164,16 @@ class SubtitleThread(QThread):
                 self.progress.emit(0, self.tr("优化字幕..."))
                 logger.info("正在优化字幕...")
                 self.finished_subtitle_length = 0  # 重置计数器
-                optimizer = SubtitleOptimizer(
-                    custom_prompt=custom_prompt,
+                if not subtitle_config.llm_model:
+                    raise Exception(self.tr("字幕优化需要配置LLM模型"))
+                self.optimizer = SubtitleOptimizer(
+                    custom_prompt=custom_prompt or "",
                     model=subtitle_config.llm_model,
                     batch_num=subtitle_config.batch_size,
                     thread_num=subtitle_config.thread_num,
                     update_callback=self.callback,
                 )
-                asr_data = optimizer.optimize_subtitle(asr_data)
+                asr_data = self.optimizer.optimize_subtitle(asr_data)
                 self.update_all.emit(asr_data.to_json())
 
             # 4. 翻译字幕
@@ -176,17 +187,35 @@ class SubtitleThread(QThread):
                 self.progress.emit(0, self.tr("翻译字幕..."))
                 logger.info("正在翻译字幕...")
                 self.finished_subtitle_length = 0  # 重置计数器
-                os.environ["DEEPLX_ENDPOINT"] = subtitle_config.deeplx_endpoint
-                translator = TranslatorFactory.create_translator(
-                    translator_type=translator_map[subtitle_config.translator_service],
-                    thread_num=subtitle_config.thread_num,
-                    batch_num=subtitle_config.batch_size,
-                    target_language=subtitle_config.target_language,
-                    model=subtitle_config.llm_model,
-                    custom_prompt=custom_prompt,
-                    is_reflect=subtitle_config.need_reflect,
-                    update_callback=self.callback,
-                )
+                if subtitle_config.deeplx_endpoint:
+                    os.environ["DEEPLX_ENDPOINT"] = subtitle_config.deeplx_endpoint
+                if subtitle_config.translator_service:
+                    # 只有使用 OpenAI 翻译服务时才需要检查 llm_model
+                    if (
+                        subtitle_config.translator_service
+                        == TranslatorServiceEnum.OPENAI
+                    ):
+                        if not subtitle_config.llm_model:
+                            raise Exception(self.tr("使用OpenAI翻译需要配置LLM模型"))
+                    translator = TranslatorFactory.create_translator(
+                        translator_type=translator_map[
+                            subtitle_config.translator_service
+                        ],
+                        thread_num=subtitle_config.thread_num,
+                        batch_num=subtitle_config.batch_size,
+                        target_language=(
+                            str(subtitle_config.target_language)
+                            if subtitle_config.target_language
+                            else "zh-CN"
+                        ),
+                        model=subtitle_config.llm_model
+                        or "",  # 非 OpenAI 服务不需要 model
+                        custom_prompt=custom_prompt or "",
+                        is_reflect=subtitle_config.need_reflect,
+                        update_callback=self.callback,
+                    )
+                else:
+                    raise Exception(self.tr("翻译服务未配置"))
                 asr_data = translator.translate_subtitle(asr_data)
                 # 移除末尾标点符号
                 if subtitle_config.need_remove_punctuation:
@@ -201,16 +230,16 @@ class SubtitleThread(QThread):
                         )
                         asr_data.save(
                             save_path=save_path,
-                            ass_style=subtitle_config.subtitle_style,
+                            ass_style=subtitle_config.subtitle_style or "",
                             layout=subtitle_layout,
                         )
                         logger.info(f"字幕保存到 {save_path}")
 
             # 5. 保存字幕
             asr_data.save(
-                save_path=self.task.output_path,
-                ass_style=subtitle_config.subtitle_style,
-                layout=subtitle_config.subtitle_layout,
+                save_path=self.task.output_path or "",
+                ass_style=subtitle_config.subtitle_style or "",
+                layout=subtitle_config.subtitle_layout or "仅译文",
             )
             logger.info(f"字幕保存到 {self.task.output_path}")
 
@@ -222,7 +251,8 @@ class SubtitleThread(QThread):
                     / f"{Path(self.task.video_path).stem}.srt"
                 )
                 asr_data.to_srt(
-                    save_path=str(save_srt_path), layout=subtitle_config.subtitle_layout
+                    save_path=str(save_srt_path),
+                    layout=subtitle_config.subtitle_layout or "仅译文",
                 )
                 # save_ass_path = (
                 #     Path(self.task.video_path).parent
@@ -263,9 +293,9 @@ class SubtitleThread(QThread):
         """停止所有处理"""
         try:
             # 先停止优化器
-            if hasattr(self, "optimizer"):
+            if hasattr(self, "optimizer") and self.optimizer:
                 try:
-                    self.optimizer.stop()
+                    self.optimizer.stop()  # type: ignore
                 except Exception as e:
                     logger.error(f"停止优化器时出错：{str(e)}")
 

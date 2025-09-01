@@ -1,5 +1,4 @@
 import re
-from pathlib import Path
 from typing import Dict, Optional
 
 
@@ -132,7 +131,7 @@ def auto_wrap_text(text: str, max_width: int, font_size: int) -> str:
 
 def auto_wrap_ass_file(
     input_file: str,
-    output_file: str = None,
+    output_file: Optional[str] = None,
     video_width: Optional[int] = None,
     video_height: Optional[int] = None,
 ):

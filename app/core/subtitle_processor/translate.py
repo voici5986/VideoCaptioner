@@ -1,34 +1,27 @@
 import hashlib
-from string import Template
-from typing import Callable, Dict, Optional, List, Any, Union
-import logging
-from pathlib import Path
-import os
-import retry
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from abc import ABC, abstractmethod
-from enum import Enum
-from openai import OpenAI
-import json
-from dataclasses import dataclass
-from functools import lru_cache
-import signal
-import requests
-import re
 import html
-from urllib.parse import quote
+import json
+import os
+import re
+from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from enum import Enum
+from string import Template
+from typing import Any, Callable, Dict, List, Optional, Union
 
+import requests
+from openai import OpenAI
+
+from app.config import CACHE_PATH
 from app.core.bk_asr.asr_data import ASRData, ASRDataSeg
-from app.core.utils import json_repair
+from app.core.storage.cache_manager import CacheManager
 from app.core.subtitle_processor.prompt import (
-    TRANSLATE_PROMPT,
     REFLECT_TRANSLATE_PROMPT,
     SINGLE_TRANSLATE_PROMPT,
+    TRANSLATE_PROMPT,
 )
-from app.core.storage.cache_manager import CacheManager
-from app.config import CACHE_PATH
+import json_repair
 from app.core.utils.logger import setup_logger
-
 
 logger = setup_logger("subtitle_translator")
 
@@ -64,7 +57,7 @@ class BaseTranslator(ABC):
         self.update_callback = update_callback
         self.custom_prompt = custom_prompt
         self._init_thread_pool()
-        self.cache_manager = CacheManager(CACHE_PATH)
+        self.cache_manager = CacheManager(str(CACHE_PATH))
 
     def _init_thread_pool(self):
         """初始化线程池"""
@@ -144,7 +137,8 @@ class BaseTranslator(ABC):
             except Exception as e:
                 if i == self.retry_times - 1:
                     raise
-                logger.warning(f"翻译重试 {i+1}/{self.retry_times}: {str(e)}")
+                logger.warning(f"翻译重试 {i + 1}/{self.retry_times}: {str(e)}")
+        return chunk  # 返回原始块作为默认值
 
     @staticmethod
     def _create_segments(
@@ -256,14 +250,17 @@ class OpenAITranslator(BaseTranslator):
                 result = json.loads(cache_result)
             else:
                 # 调用API翻译
-                response = self._call_api(
-                    prompt, json.dumps(subtitle_chunk, ensure_ascii=False)
-                )
+                response = self._call_api(prompt, subtitle_chunk)
                 # 解析结果
-                result = json_repair.loads(response.choices[0].message.content)
+                parsed_result = json_repair.loads(response.choices[0].message.content)
+                # 处理json_repair可能返回的元组
+                if isinstance(parsed_result, tuple):
+                    result = parsed_result[0]
+                else:
+                    result = parsed_result
                 # 检查翻译结果数量是否匹配
-                if len(result) != len(subtitle_chunk):
-                    logger.warning(f"翻译结果数量不匹配，将使用单条翻译模式重试")
+                if isinstance(result, dict) and len(result) != len(subtitle_chunk):
+                    logger.warning("翻译结果数量不匹配，将使用单条翻译模式重试")
                     return self._translate_chunk_single(subtitle_chunk)
                 # 保存到缓存
                 self.cache_manager.set_llm_result(
@@ -273,13 +270,20 @@ class OpenAITranslator(BaseTranslator):
                     **cache_params,
                 )
 
-            if self.is_reflect:
-                result = {k: f"{v['revised_translation']}" for k, v in result.items()}
+            if isinstance(result, dict):
+                if self.is_reflect:
+                    result = {
+                        k: f"{v.get('revised_translation', v) if isinstance(v, dict) else v}"
+                        for k, v in result.items()
+                    }
+                else:
+                    result = {k: f"{v}" for k, v in result.items()}
             else:
-                result = {k: f"{v}" for k, v in result.items()}
+                # 如果结果不是字典，返回原始内容
+                return subtitle_chunk
 
             return result
-        except Exception as e:
+        except Exception:
             try:
                 return self._translate_chunk_single(subtitle_chunk)
             except Exception as e:
@@ -334,11 +338,17 @@ class OpenAITranslator(BaseTranslator):
 
         return result
 
-    def _call_api(self, prompt: str, user_content: Dict[str, str]) -> Any:
+    def _call_api(self, prompt: str, user_content: Union[str, Dict[str, str]]) -> Any:
         """调用OpenAI API"""
-        messages = [
+        # 将user_content转换为字符串
+        if isinstance(user_content, dict):
+            content_str = json.dumps(user_content, ensure_ascii=False)
+        else:
+            content_str = user_content
+
+        messages: Any = [
             {"role": "system", "content": prompt},
-            {"role": "user", "content": user_content},
+            {"role": "user", "content": content_str},
         ]
 
         return self.client.chat.completions.create(
@@ -351,10 +361,26 @@ class OpenAITranslator(BaseTranslator):
     def _parse_response(self, response: Any) -> Dict[str, str]:
         """解析API响应"""
         try:
-            result = json_repair.loads(response.choices[0].message.content)
-            if self.is_reflect:
-                return {k: v["revised_translation"] for k, v in result.items()}
-            return result
+            parsed = json_repair.loads(response.choices[0].message.content)
+            # 处理json_repair可能返回的元组
+            if isinstance(parsed, tuple):
+                result = parsed[0]
+            else:
+                result = parsed
+
+            if isinstance(result, dict):
+                if self.is_reflect:
+                    return {
+                        k: (
+                            v.get("revised_translation", v)
+                            if isinstance(v, dict)
+                            else str(v)
+                        )
+                        for k, v in result.items()
+                    }
+                return {k: str(v) for k, v in result.items()}
+            else:
+                raise ValueError("翻译结果不是字典格式")
         except Exception as e:
             raise ValueError(f"解析翻译结果失败：{str(e)}")
 

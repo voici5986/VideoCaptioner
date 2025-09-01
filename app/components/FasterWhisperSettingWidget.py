@@ -1,33 +1,26 @@
 import os
 import subprocess
-import sys
 from pathlib import Path
-
-from app.core.utils.platform_utils import open_folder
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QShowEvent
 from PyQt5.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
-    QScrollArea,
-    QStackedWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
-from qfluentwidgets import BodyLabel, CardWidget, ComboBox, ComboBoxSettingCard
-from qfluentwidgets import FluentIcon as FIF
 from qfluentwidgets import (
+    BodyLabel,
+    ComboBox,
+    ComboBoxSettingCard,
     HyperlinkButton,
     HyperlinkCard,
     InfoBar,
-    InfoBarPosition,
     MessageBoxBase,
     ProgressBar,
     PushButton,
-    PushSettingCard,
-    RangeSettingCard,
     SettingCardGroup,
     SingleDirectionScrollArea,
     SubtitleLabel,
@@ -35,31 +28,20 @@ from qfluentwidgets import (
     TableItemDelegate,
     TableWidget,
 )
+from qfluentwidgets import FluentIcon as FIF
 
 from app.common.config import cfg
-from app.components.EditComboBoxSettingCard import EditComboBoxSettingCard
 from app.components.LineEditSettingCard import LineEditSettingCard
 from app.components.SpinBoxSettingCard import DoubleSpinBoxSettingCard
-from app.config import BIN_PATH, CACHE_PATH, MODEL_PATH
+from app.config import BIN_PATH, MODEL_PATH
 from app.core.entities import (
     FasterWhisperModelEnum,
     TranscribeLanguageEnum,
     VadMethodEnum,
-    WhisperModelEnum,
 )
+from app.core.utils.platform_utils import open_folder
 from app.thread.file_download_thread import FileDownloadThread
 from app.thread.modelscope_download_thread import ModelscopeDownloadThread
-
-from ..common.config import cfg
-from ..core.entities import (
-    FasterWhisperModelEnum,
-    TranscribeLanguageEnum,
-    TranscribeModelEnum,
-    VadMethodEnum,
-    WhisperModelEnum,
-)
-from .EditComboBoxSettingCard import EditComboBoxSettingCard
-from .LineEditSettingCard import LineEditSettingCard
 
 # 在文件开头添加常量定义
 FASTER_WHISPER_PROGRAMS = [
@@ -362,12 +344,12 @@ class FasterWhisperDownloadDialog(MessageBoxBase):
         """添加模型表格行"""
         # 模型名称
         name_item = QTableWidgetItem(model["label"])
-        name_item.setTextAlignment(Qt.AlignCenter)
+        name_item.setTextAlignment(Qt.AlignCenter)  # type: ignore
         self.model_table.setItem(row, 0, name_item)
 
         # 大小
-        size_item = QTableWidgetItem(f"{int(model['size'])/1024:.1f} MB")
-        size_item.setTextAlignment(Qt.AlignCenter)
+        size_item = QTableWidgetItem(f"{int(model['size']) / 1024:.1f} MB")
+        size_item.setTextAlignment(Qt.AlignCenter)  # type: ignore
         self.model_table.setItem(row, 1, size_item)
 
         # 状态 - 检查model.bin文件是否存在
@@ -379,8 +361,8 @@ class FasterWhisperDownloadDialog(MessageBoxBase):
             self.tr("已下载") if is_downloaded else self.tr("未下载")
         )
         if is_downloaded:
-            status_item.setForeground(Qt.green)
-        status_item.setTextAlignment(Qt.AlignCenter)
+            status_item.setForeground(Qt.green)  # type: ignore
+        status_item.setTextAlignment(Qt.AlignCenter)  # type: ignore
         self.model_table.setItem(row, 2, status_item)
 
         # 下载按钮
@@ -556,8 +538,8 @@ class FasterWhisperDownloadDialog(MessageBoxBase):
             self._set_all_download_buttons_enabled(True)
             # 更新状态
             status_item = QTableWidgetItem(self.tr("已下载"))
-            status_item.setForeground(Qt.green)
-            status_item.setTextAlignment(Qt.AlignCenter)
+            status_item.setForeground(Qt.green)  # type: ignore
+            status_item.setTextAlignment(Qt.AlignCenter)  # type: ignore
             self.model_table.setItem(row, 2, status_item)
 
             # 更新下载按钮文本
@@ -569,9 +551,33 @@ class FasterWhisperDownloadDialog(MessageBoxBase):
 
             # 更新主设置对话框的模型选择
             if self.setting_widget:
-                model_text = model["label"]
-                if self.setting_widget.model_card.comboBox.findText(model_text) == -1:
-                    self.setting_widget.model_card.comboBox.addItem(model_text)
+                # 保存当前值并清空
+                current_value = cfg.faster_whisper_model.value
+                combo = self.setting_widget.model_card.comboBox
+                combo.clear()
+
+                # 找出已下载的模型
+                available = []
+                model_map = {
+                    m["label"].lower(): m["value"] for m in FASTER_WHISPER_MODELS
+                }
+                for enum_val in FasterWhisperModelEnum:
+                    if enum_val.value in model_map:
+                        if (MODEL_PATH / model_map[enum_val.value]).exists():
+                            available.append(enum_val)
+
+                # 重建下拉框
+                self.setting_widget.model_card.optionToText = {
+                    e: e.value for e in available
+                }
+                for enum_val in available:
+                    combo.addItem(enum_val.value, userData=enum_val)
+
+                # 恢复选择
+                if current_value in available:
+                    combo.setCurrentText(current_value.value)
+                elif combo.count() > 0:
+                    combo.setCurrentIndex(0)
 
             InfoBar.success(
                 self.tr("下载成功"),
@@ -667,7 +673,7 @@ class FasterWhisperSettingWidget(QWidget):
         self.main_layout = QVBoxLayout(self)
 
         # 创建单向滚动区域和容器
-        self.scrollArea = SingleDirectionScrollArea(orient=Qt.Vertical, parent=self)
+        self.scrollArea = SingleDirectionScrollArea(orient=Qt.Vertical, parent=self)  # type: ignore
         self.scrollArea.setStyleSheet(
             "QScrollArea{background: transparent; border: none}"
         )
@@ -757,7 +763,7 @@ class FasterWhisperSettingWidget(QWidget):
         # VAD阈值
         self.vad_threshold_card = DoubleSpinBoxSettingCard(
             cfg.faster_whisper_vad_threshold,
-            FIF.VOLUME,
+            FIF.VOLUME,  # type: ignore
             self.tr("VAD阈值"),
             self.tr("语音概率阈值，高于此值视为语音"),
             minimum=0.00,

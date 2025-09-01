@@ -1,9 +1,7 @@
 import datetime
-import logging
 
 from PyQt5.QtCore import QThread, pyqtSignal
 
-from app.common.config import cfg
 from app.core.entities import SynthesisTask
 from app.core.utils.logger import setup_logger
 from app.core.utils.video_utils import add_subtitles
@@ -23,7 +21,7 @@ class VideoSynthesisThread(QThread):
 
     def run(self):
         try:
-            logger.info(f"\n===========视频合成任务开始===========")
+            logger.info("\n===========视频合成任务开始===========")
             logger.info(f"时间：{datetime.datetime.now()}")
             video_file = self.task.video_path
             subtitle_file = self.task.subtitle_path
@@ -32,13 +30,20 @@ class VideoSynthesisThread(QThread):
             need_video = self.task.synthesis_config.need_video
 
             if not need_video:
-                logger.info(f"不需要合成视频，跳过")
+                logger.info("不需要合成视频，跳过")
                 self.progress.emit(100, self.tr("合成完成"))
                 self.finished.emit(self.task)
                 return
 
             logger.info(f"开始合成视频: {video_file}")
             self.progress.emit(5, self.tr("正在合成"))
+
+            if not video_file:
+                raise ValueError(self.tr("视频路径为空"))
+            if not subtitle_file:
+                raise ValueError(self.tr("字幕路径为空"))
+            if not output_path:
+                raise ValueError(self.tr("输出路径为空"))
 
             add_subtitles(
                 video_file,

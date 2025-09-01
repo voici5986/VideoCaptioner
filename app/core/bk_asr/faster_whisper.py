@@ -5,10 +5,11 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional, Callable, Any
 
 from ..utils.logger import setup_logger
-from .asr_data import ASRDataSeg, ASRData
+from ..utils.subprocess_helper import StreamReader
+from .asr_data import ASRData, ASRDataSeg
 from .base import BaseASR
 
 logger = setup_logger("faster_whisper")
@@ -23,7 +24,7 @@ class FasterWhisperASR(BaseASR):
         model_dir: str,
         language: str = "zh",
         device: str = "cpu",
-        output_dir: str = None,
+        output_dir: Optional[str] = None,
         output_format: str = "srt",
         use_cache: bool = False,
         need_word_time_stamp: bool = False,
@@ -40,7 +41,7 @@ class FasterWhisperASR(BaseASR):
         max_line_count: int = 1,
         max_comma: int = 20,
         max_comma_cent: int = 50,
-        prompt: str = None,
+        prompt: Optional[str] = None,
     ):
         super().__init__(audio_path, use_cache)
 
@@ -94,7 +95,7 @@ class FasterWhisperASR(BaseASR):
                 if not shutil.which("faster-whisper"):
                     raise EnvironmentError("faster-whisper程序未找到，请确保已经下载。")
                 self.faster_whisper_program = "faster-whisper"
-                self.vad_method = None
+                self.vad_method = ""
         elif self.device == "cuda":
             if not shutil.which("faster-whisper-xxl"):
                 raise EnvironmentError(
@@ -189,7 +190,7 @@ class FasterWhisperASR(BaseASR):
 
         return cmd
 
-    def _make_segments(self, resp_data: str) -> list[ASRDataSeg]:
+    def _make_segments(self, resp_data: str) -> List[ASRDataSeg]:
         asr_data = ASRData.from_srt(resp_data)
         # 过滤掉纯音乐标记
         filtered_segments = []
@@ -204,21 +205,29 @@ class FasterWhisperASR(BaseASR):
                 filtered_segments.append(seg)
         return filtered_segments
 
-    def _run(self, callback=None) -> str:
+    def _run(
+        self, callback: Optional[Callable[[int, str], None]] = None, **kwargs: Any
+    ) -> str:
+        def _default_callback(x, y):
+            pass
+
         if callback is None:
-            callback = lambda x, y: None
+            callback = _default_callback
 
-        temp_dir = Path(tempfile.gettempdir()) / "bk_asr"
-        temp_dir.mkdir(parents=True, exist_ok=True)
-
-        with tempfile.TemporaryDirectory(dir=temp_dir) as temp_path:
+        with tempfile.TemporaryDirectory() as temp_path:
             temp_dir = Path(temp_path)
             wav_path = temp_dir / "audio.wav"
             output_path = wav_path.with_suffix(".srt")
 
-            shutil.copy2(self.audio_path, wav_path)
+            if isinstance(self.audio_path, str):
+                shutil.copy2(self.audio_path, wav_path)
+            else:
+                if self.file_binary:
+                    wav_path.write_bytes(self.file_binary)
+                else:
+                    raise ValueError("No audio data available")
 
-            cmd = self._build_command(wav_path)
+            cmd = self._build_command(str(wav_path))
 
             logger.info("Faster Whisper 执行命令: %s", " ".join(cmd))
             callback(5, "Whisper识别")
@@ -233,32 +242,48 @@ class FasterWhisperASR(BaseASR):
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             )
 
+            # 使用 StreamReader 处理输出
+            reader = StreamReader(self.process)
+            reader.start_reading()
+
             is_finish = False
             error_msg = ""
 
-            # 实时打印日志和错误输出
-            while self.process.poll() is None:
-                output = self.process.stdout.readline()
-                output = output.strip()
-                if output:
-                    # 解析进度百分比
-                    if match := re.search(r"(\d+)%", output):
-                        progress = int(match.group(1))
-                        if progress == 100:
-                            is_finish = True
-                        mapped_progress = int(5 + (progress * 0.9))
-                        callback(mapped_progress, f"{mapped_progress} %")
-                    if "Subtitles are written to" in output:
-                        is_finish = True
-                        callback(100, "识别完成")
-                    if "error" in output:
-                        error_msg += output
-                        logger.error(output)
-                    else:
-                        logger.info(output)
+            # 实时处理输出
+            while True:
+                # 检查进程状态
+                if self.process.poll() is not None:
+                    # 进程已结束，读取剩余输出
+                    for stream_name, line in reader.get_remaining_output():
+                        line = line.strip()
+                        if line:
+                            if "error" in line:
+                                error_msg += line
+                            else:
+                                logger.info(line)
+                    break
 
-            # 获取所有输出和错误信息
-            self.process.communicate()
+                # 读取输出
+                output = reader.get_output(timeout=0.1)
+                if output:
+                    stream_name, line = output
+                    line = line.strip()
+                    if line:
+                        # 解析进度百分比
+                        if match := re.search(r"(\d+)%", line):
+                            progress = int(match.group(1))
+                            if progress == 100:
+                                is_finish = True
+                            mapped_progress = int(5 + (progress * 0.9))
+                            callback(mapped_progress, f"{mapped_progress} %")
+                        if "Subtitles are written to" in line:
+                            is_finish = True
+                            callback(100, "识别完成")
+                        if "error" in line:
+                            error_msg += line
+                            logger.error(line)
+                        else:
+                            logger.info(line)
 
             logger.info("Faster Whisper 返回值: %s", self.process.returncode)
             if not is_finish:

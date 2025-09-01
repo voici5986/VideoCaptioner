@@ -2,7 +2,7 @@ import os
 
 from openai import OpenAI
 
-from ..utils import json_repair
+import json_repair
 from ..utils.logger import setup_logger
 from .prompt import SUMMARIZER_PROMPT
 
@@ -21,7 +21,7 @@ class SubtitleSummarizer:
         self.client = OpenAI(base_url=base_url, api_key=api_key)
 
     def summarize(self, subtitle_content: str) -> str:
-        logger.info(f"开始摘要化字幕内容")
+        logger.info("开始摘要化字幕内容")
         try:
             subtitle_content = subtitle_content[:3000]
             response = self.client.chat.completions.create(
@@ -35,14 +35,18 @@ class SubtitleSummarizer:
                     },
                 ],
             )
-            return str(json_repair.loads(response.choices[0].message.content))
+            content = response.choices[0].message.content
+            if content is None:
+                return ""
+            return str(json_repair.loads(content))
         except Exception as e:
             logger.exception(f"摘要化字幕内容失败: {e}")
             return ""
 
 
 if __name__ == "__main__":
-    summarizer = SubtitleSummarizer()
+    # 测试代码，需要提供模型名称
+    summarizer = SubtitleSummarizer("gpt-3.5-turbo")
     example_subtitles = {
         0: "既然是想做并发编程",
         1: "比如说肯定是想干嘛",

@@ -1,19 +1,16 @@
 import json
-import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union
 
-import retry
 from openai import OpenAI
 
 from app.config import CACHE_PATH
 from app.core.bk_asr.asr_data import ASRData, ASRDataSeg
 from app.core.storage.cache_manager import CacheManager
-from app.core.utils import json_repair
 from app.core.subtitle_processor.alignment import SubtitleAligner
 from app.core.subtitle_processor.prompt import OPTIMIZER_PROMPT
+import json_repair
 from app.core.utils.logger import setup_logger
 
 logger = setup_logger("subtitle_optimizer")
@@ -132,7 +129,7 @@ class SubtitleOptimizer:
             except Exception as e:
                 if i == self.retry_times - 1:
                     raise
-                logger.warning(f"优化重试 {i+1}/{self.retry_times}: {str(e)}")
+                logger.warning(f"优化重试 {i + 1}/{self.retry_times}: {str(e)}")
         return chunk
 
     def _optimize_chunk(self, subtitle_chunk: Dict[str, str]) -> Dict[str, str]:

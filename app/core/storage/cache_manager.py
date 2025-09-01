@@ -2,19 +2,19 @@
 import hashlib
 import json
 import logging
-from datetime import datetime, date
-from typing import Any, Dict, List, Optional, TypeVar, Generic
+from datetime import date, datetime
+from typing import Any, Dict, Optional
+
 from sqlalchemy import and_
-from sqlalchemy.orm import Session
 
 from .constants import CACHE_CONFIG, OperationType, TranslatorType
 from .database import DatabaseManager
 from .models import (
+    ASRCache,
+    DailyServiceUsage,
     LLMCache,
     TranslationCache,
     UsageStatistics,
-    ASRCache,
-    DailyServiceUsage,
 )
 
 logger = logging.getLogger(__name__)
@@ -337,9 +337,9 @@ class ServiceUsageManager(BaseManager):
                     )
 
                     if result:
-                        if result.usage_count >= daily_limit:
+                        if result.usage_count >= daily_limit:  # type: ignore
                             return False
-                        result.usage_count += 1
+                        result.usage_count += 1  # type: ignore
                     else:
                         session.add(
                             DailyServiceUsage(
@@ -378,7 +378,7 @@ class ServiceUsageManager(BaseManager):
                 )
                 if usage:
                     session.refresh(usage)  # 确保获取最新数据
-                return not usage or usage.usage_count < daily_limit
+                return not usage or usage.usage_count < daily_limit  # type: ignore
         except Exception as e:
             self._handle_db_error("check_service_available", e)
             return False
@@ -402,7 +402,7 @@ class ServiceUsageManager(BaseManager):
                 )
                 if usage:
                     session.refresh(usage)  # 确保获取最新数据
-                    return max(0, daily_limit - usage.usage_count)
+                    return max(0, daily_limit - usage.usage_count)  # type: ignore
                 return daily_limit
         except Exception as e:
             self._handle_db_error("get_remaining_usage", e)

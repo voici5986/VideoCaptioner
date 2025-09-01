@@ -1,20 +1,14 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QHBoxLayout,
-    QScrollArea,
-    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
-from qfluentwidgets import BodyLabel, CardWidget, ComboBox, ComboBoxSettingCard
-from qfluentwidgets import FluentIcon as FIF
 from qfluentwidgets import (
-    HyperlinkCard,
-    RangeSettingCard,
+    ComboBoxSettingCard,
     SettingCardGroup,
     SingleDirectionScrollArea,
-    SwitchSettingCard,
 )
+from qfluentwidgets import FluentIcon as FIF
 
 from ..common.config import cfg
 from ..core.entities import TranscribeLanguageEnum
@@ -31,7 +25,7 @@ class WhisperAPISettingWidget(QWidget):
         self.main_layout = QVBoxLayout(self)
 
         # 创建单向滚动区域和容器
-        self.scrollArea = SingleDirectionScrollArea(orient=Qt.Vertical, parent=self)
+        self.scrollArea = SingleDirectionScrollArea(orient=Qt.Vertical, parent=self)  # type: ignore
         self.scrollArea.setStyleSheet(
             "QScrollArea{background: transparent; border: none}"
         )
@@ -65,7 +59,7 @@ class WhisperAPISettingWidget(QWidget):
         # Model
         self.model_card = EditComboBoxSettingCard(
             cfg.whisper_api_model,
-            FIF.ROBOT,
+            FIF.ROBOT,  # type: ignore
             self.tr("Whisper 模型"),
             self.tr("选择 Whisper 模型"),
             ["whisper-large-v3", "whisper-large-v3-turbo", "whisper-1"],

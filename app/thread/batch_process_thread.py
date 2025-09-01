@@ -1,24 +1,20 @@
-from re import S
-from typing import List, Dict, Optional
-from PyQt5.QtCore import QThread, pyqtSignal, Qt
-from pathlib import Path
 import queue
 import time
 from functools import partial
+from typing import Dict, Optional
 
+from PyQt5.QtCore import QThread, pyqtSignal
 
-from app.core.task_factory import TaskFactory
 from app.core.entities import (
+    BatchTaskStatus,
+    BatchTaskType,
     TranscribeTask,
-    SubtitleTask,
-    TranscriptAndSubtitleTask,
-    FullProcessTask,
 )
-from app.thread.transcript_thread import TranscriptThread
-from app.thread.subtitle_thread import SubtitleThread
-from app.thread.video_synthesis_thread import VideoSynthesisThread
+from app.core.task_factory import TaskFactory
 from app.core.utils.logger import setup_logger
-from app.core.entities import BatchTaskType, BatchTaskStatus
+from app.thread.subtitle_thread import SubtitleThread
+from app.thread.transcript_thread import TranscriptThread
+from app.thread.video_synthesis_thread import VideoSynthesisThread
 
 logger = setup_logger("batch_process_thread")
 
@@ -123,14 +119,14 @@ class BatchProcessThread(QThread):
         # 保存线程引用
         self.threads.append(thread)
 
-        thread.progress.connect(
-            partial(self._on_progress_wrapper, batch_task), Qt.QueuedConnection
+        thread.progress.connect(  # type: ignore
+            partial(self._on_progress_wrapper, batch_task)  # type: ignore
         )
-        thread.error.connect(
-            partial(self._on_error_wrapper, batch_task), Qt.QueuedConnection
+        thread.error.connect(  # type: ignore
+            partial(self._on_error_wrapper, batch_task)  # type: ignore
         )
-        thread.finished.connect(
-            partial(self._on_finished_wrapper, batch_task), Qt.QueuedConnection
+        thread.finished.connect(  # type: ignore
+            partial(self._on_finished_wrapper, batch_task)  # type: ignore
         )
 
         thread.start()
@@ -145,20 +141,19 @@ class BatchProcessThread(QThread):
         # 保存线程引用
         self.threads.append(thread)
 
-        thread.progress.connect(
-            partial(self._on_progress_wrapper, batch_task), Qt.QueuedConnection
+        thread.progress.connect(  # type: ignore
+            partial(self._on_progress_wrapper, batch_task)  # type: ignore
         )
-        thread.error.connect(
-            partial(self._on_error_wrapper, batch_task), Qt.QueuedConnection
+        thread.error.connect(  # type: ignore
+            partial(self._on_error_wrapper, batch_task)  # type: ignore
         )
-        thread.finished.connect(
-            partial(self._on_finished_wrapper, batch_task), Qt.QueuedConnection
+        thread.finished.connect(  # type: ignore
+            partial(self._on_finished_wrapper, batch_task)  # type: ignore
         )
 
         thread.start()
 
     def _handle_trans_sub_task(self, batch_task: BatchTask):
-        task = self.factory.create_transcript_and_subtitle_task(batch_task.file_path)
         trans_task = self.factory.create_transcribe_task(
             batch_task.file_path, need_next_task=True
         )
@@ -170,15 +165,11 @@ class BatchProcessThread(QThread):
         self.threads.append(thread)
 
         thread.progress.connect(
-            partial(self._on_trans_sub_progress_wrapper, batch_task),
-            Qt.QueuedConnection,
+            partial(self._on_trans_sub_progress_wrapper, batch_task)
         )
-        thread.error.connect(
-            partial(self._on_error_wrapper, batch_task), Qt.QueuedConnection
-        )
+        thread.error.connect(partial(self._on_error_wrapper, batch_task))
         thread.finished.connect(
-            partial(self._on_trans_sub_finished_wrapper, batch_task),
-            Qt.QueuedConnection,
+            partial(self._on_trans_sub_finished_wrapper, batch_task)
         )
 
         thread.start()
@@ -198,6 +189,8 @@ class BatchProcessThread(QThread):
             self.threads.remove(batch_task.current_thread)
 
         # 创建字幕任务
+        if not task.output_path:
+            raise ValueError("Task output_path is None")
         subtitle_task = self.factory.create_subtitle_task(
             task.output_path, batch_task.file_path, need_next_task=True
         )
@@ -211,15 +204,10 @@ class BatchProcessThread(QThread):
         from functools import partial
 
         thread.progress.connect(
-            partial(self._on_trans_sub_subtitle_progress_wrapper, batch_task),
-            Qt.QueuedConnection,
+            partial(self._on_trans_sub_subtitle_progress_wrapper, batch_task)
         )
-        thread.error.connect(
-            partial(self._on_error_wrapper, batch_task), Qt.QueuedConnection
-        )
-        thread.finished.connect(
-            partial(self._on_finished_wrapper, batch_task), Qt.QueuedConnection
-        )
+        thread.error.connect(partial(self._on_error_wrapper, batch_task))
+        thread.finished.connect(partial(self._on_finished_wrapper, batch_task))
 
         thread.start()
 
@@ -231,7 +219,6 @@ class BatchProcessThread(QThread):
         self.task_progress.emit(batch_task.file_path, progress, message)
 
     def _handle_full_process_task(self, batch_task: BatchTask):
-        task = self.factory.create_full_process_task(batch_task.file_path)
         # 首先创建转录任务
         trans_task = self.factory.create_transcribe_task(
             batch_task.file_path, need_next_task=True
@@ -242,15 +229,9 @@ class BatchProcessThread(QThread):
         # 保存线程引用
         self.threads.append(thread)
 
-        thread.progress.connect(
-            partial(self.on_full_process_progress, batch_task), Qt.QueuedConnection
-        )
-        thread.error.connect(
-            partial(self._on_error_wrapper, batch_task), Qt.QueuedConnection
-        )
-        thread.finished.connect(
-            partial(self.on_full_process_finished, batch_task), Qt.QueuedConnection
-        )
+        thread.progress.connect(partial(self.on_full_process_progress, batch_task))
+        thread.error.connect(partial(self._on_error_wrapper, batch_task))
+        thread.finished.connect(partial(self.on_full_process_finished, batch_task))
 
         thread.start()
 
@@ -268,6 +249,8 @@ class BatchProcessThread(QThread):
             self.threads.remove(batch_task.current_thread)
 
         # 转录完成后创建字幕任务
+        if not task.output_path:
+            raise ValueError("Task output_path is None")
         subtitle_task = self.factory.create_subtitle_task(
             task.output_path,
             batch_task.file_path,
@@ -280,15 +263,11 @@ class BatchProcessThread(QThread):
         self.threads.append(thread)
 
         thread.progress.connect(
-            partial(self.on_full_process_subtitle_progress, batch_task),
-            Qt.QueuedConnection,
+            partial(self.on_full_process_subtitle_progress, batch_task)
         )
-        thread.error.connect(
-            partial(self._on_error_wrapper, batch_task), Qt.QueuedConnection
-        )
+        thread.error.connect(partial(self._on_error_wrapper, batch_task))
         thread.finished.connect(
-            partial(self.on_full_process_subtitle_finished, batch_task),
-            Qt.QueuedConnection,
+            partial(self.on_full_process_subtitle_finished, batch_task)
         )
 
         thread.start()
@@ -317,15 +296,10 @@ class BatchProcessThread(QThread):
         self.threads.append(thread)
 
         thread.progress.connect(
-            partial(self.on_full_process_synthesis_progress, batch_task),
-            Qt.QueuedConnection,
+            partial(self.on_full_process_synthesis_progress, batch_task)
         )
-        thread.error.connect(
-            partial(self._on_error_wrapper, batch_task), Qt.QueuedConnection
-        )
-        thread.finished.connect(
-            partial(self._on_finished_wrapper, batch_task), Qt.QueuedConnection
-        )
+        thread.error.connect(partial(self._on_error_wrapper, batch_task))
+        thread.finished.connect(partial(self._on_finished_wrapper, batch_task))
 
         thread.start()
 
@@ -342,7 +316,7 @@ class BatchProcessThread(QThread):
             task = self.current_tasks[file_path]
             if task.current_thread:
                 if hasattr(task.current_thread, "stop"):
-                    task.current_thread.stop()
+                    task.current_thread.stop()  # type: ignore
             del self.current_tasks[file_path]
             # 从队列中移除任务
             with self.task_queue.mutex:
@@ -353,7 +327,7 @@ class BatchProcessThread(QThread):
         # 停止所有线程
         for thread in self.threads:
             if hasattr(thread, "stop"):
-                thread.stop()
+                thread.stop()  # type: ignore
             thread.wait()  # 等待线程结束
         self.threads.clear()
         self.current_tasks.clear()

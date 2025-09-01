@@ -2,20 +2,17 @@
 
 import datetime
 import os
-import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
-from app.core.utils.platform_utils import open_folder
-
-from PyQt5.QtCore import *
+from PyQt5.QtCore import Qt, QStandardPaths, pyqtSignal
 from PyQt5.QtGui import QFont, QPixmap
 from PyQt5.QtWidgets import (
     QApplication,
     QFileDialog,
     QHBoxLayout,
     QLabel,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -49,6 +46,7 @@ from app.core.entities import (
     VideoInfo,
 )
 from app.core.task_factory import TaskFactory
+from app.core.utils.platform_utils import open_folder
 from app.thread.transcript_thread import TranscriptThread
 from app.thread.video_info_thread import VideoInfoThread
 
@@ -58,39 +56,40 @@ DEFAULT_THUMBNAIL_PATH = RESOURCE_PATH / "assets" / "default_thumbnail.jpg"
 class VideoInfoCard(CardWidget):
     finished = pyqtSignal(TranscribeTask)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.setup_ui()
         self.setup_signals()
-        self.task = None
-        self.video_info = None
+        self.task: Optional[TranscribeTask] = None
+        self.video_info: Optional[VideoInfo] = None
         self.transcription_interface = parent
 
-    def setup_ui(self):
+    def setup_ui(self) -> None:
         self.setFixedHeight(150)
-        self.layout = QHBoxLayout(self)
-        self.layout.setContentsMargins(20, 15, 20, 15)
-        self.layout.setSpacing(20)
+        self.main_layout = QHBoxLayout(self)
+        self.main_layout.setContentsMargins(20, 15, 20, 15)
+        self.main_layout.setSpacing(20)
 
         self.setup_thumbnail()
         self.setup_info_layout()
         self.setup_button_layout()
 
-    def setup_thumbnail(self):
-        current_dir = os.path.dirname(os.path.abspath(__file__))
+    def setup_thumbnail(self) -> None:
         default_thumbnail_path = os.path.join(DEFAULT_THUMBNAIL_PATH)
 
         self.video_thumbnail = QLabel(self)
         self.video_thumbnail.setFixedSize(208, 117)
         self.video_thumbnail.setStyleSheet("background-color: #1E1F22;")
-        self.video_thumbnail.setAlignment(Qt.AlignCenter)
+        self.video_thumbnail.setAlignment(Qt.AlignCenter)  # type: ignore
         pixmap = QPixmap(default_thumbnail_path).scaled(
-            self.video_thumbnail.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+            self.video_thumbnail.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.SmoothTransformation,  # type: ignore
         )
         self.video_thumbnail.setPixmap(pixmap)
-        self.layout.addWidget(self.video_thumbnail, 0, Qt.AlignLeft)
+        self.main_layout.addWidget(self.video_thumbnail, 0, Qt.AlignLeft)  # type: ignore
 
-    def setup_info_layout(self):
+    def setup_info_layout(self) -> None:
         self.info_layout = QVBoxLayout()
         self.info_layout.setContentsMargins(3, 8, 3, 8)
         self.info_layout.setSpacing(10)
@@ -98,7 +97,7 @@ class VideoInfoCard(CardWidget):
         self.video_title = BodyLabel(self.tr("请拖入音频或视频文件"), self)
         self.video_title.setFont(QFont("Microsoft YaHei", 14, QFont.Bold))
         self.video_title.setWordWrap(True)
-        self.info_layout.addWidget(self.video_title, alignment=Qt.AlignTop)
+        self.info_layout.addWidget(self.video_title, alignment=Qt.AlignTop)  # type: ignore
 
         self.details_layout = QHBoxLayout()
         self.details_layout.setSpacing(15)
@@ -118,9 +117,9 @@ class VideoInfoCard(CardWidget):
         self.details_layout.addWidget(self.progress_ring)
         self.details_layout.addStretch(1)
         self.info_layout.addLayout(self.details_layout)
-        self.layout.addLayout(self.info_layout)
+        self.main_layout.addLayout(self.info_layout)  # type: ignore
 
-    def create_pill_button(self, text, width):
+    def create_pill_button(self, text: str, width: int) -> PillPushButton:
         button = PillPushButton(text, self)
         button.setCheckable(False)
         setFont(button, 11)
@@ -128,7 +127,7 @@ class VideoInfoCard(CardWidget):
         button.setMinimumWidth(50)
         return button
 
-    def setup_button_layout(self):
+    def setup_button_layout(self) -> None:
         self.button_layout = QVBoxLayout()
         self.open_folder_button = PushButton(self.tr("打开文件夹"), self)
         self.start_button = PrimaryPushButton(self.tr("开始转录"), self)
@@ -140,9 +139,9 @@ class VideoInfoCard(CardWidget):
         button_widget = QWidget()
         button_widget.setLayout(self.button_layout)
         button_widget.setFixedWidth(130)
-        self.layout.addWidget(button_widget)
+        self.main_layout.addWidget(button_widget)  # type: ignore
 
-    def update_info(self, video_info: VideoInfo):
+    def update_info(self, video_info: VideoInfo) -> None:
         """更新视频信息显示"""
         # self.reset_ui()
         self.video_info = video_info
@@ -155,7 +154,7 @@ class VideoInfoCard(CardWidget):
         self.file_size_info.setText(self.tr("大小: ") + f"{file_size_mb:.1f} MB")
         duration = datetime.timedelta(seconds=int(video_info.duration_seconds))
         self.duration_info.setText(self.tr("时长: ") + f"{duration}")
-        if self.transcription_interface and self.transcription_interface.is_processing:
+        if self.transcription_interface and self.transcription_interface.is_processing:  # type: ignore
             self.start_button.setEnabled(False)
         else:
             self.start_button.setEnabled(True)
@@ -167,11 +166,13 @@ class VideoInfoCard(CardWidget):
             thumbnail_path = RESOURCE_PATH / "assets" / "audio-thumbnail.png"
 
         pixmap = QPixmap(str(thumbnail_path)).scaled(
-            self.video_thumbnail.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+            self.video_thumbnail.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.SmoothTransformation,  # type: ignore
         )
         self.video_thumbnail.setPixmap(pixmap)
 
-    def setup_signals(self):
+    def setup_signals(self) -> None:
         self.start_button.clicked.connect(self.on_start_button_clicked)
         self.open_folder_button.clicked.connect(self.on_open_folder_clicked)
 
@@ -200,11 +201,11 @@ class VideoInfoCard(CardWidget):
     def on_open_folder_clicked(self):
         """打开文件夹按钮点击事件"""
         if self.task and self.task.output_path:
-            original_subtitle_save_path = Path(self.task.output_path)
+            original_subtitle_save_path = Path(str(self.task.output_path))
             target_dir = str(
                 original_subtitle_save_path.parent
                 if original_subtitle_save_path.exists()
-                else Path(self.task.file_path).parent
+                else Path(str(self.task.file_path)).parent
             )
             open_folder(target_dir)
         else:
@@ -217,12 +218,14 @@ class VideoInfoCard(CardWidget):
 
     def start_transcription(self, need_create_task=True):
         """开始转录过程"""
-        self.transcription_interface.is_processing = True
+        self.transcription_interface.is_processing = True  # type: ignore
         self.start_button.setEnabled(False)
 
         if need_create_task:
             self.task = TaskFactory.create_transcribe_task(self.video_info.file_path)
 
+        if not self.task:
+            return
         self.transcript_thread = TranscriptThread(self.task)
         self.transcript_thread.finished.connect(self.on_transcript_finished)
         self.transcript_thread.progress.connect(self.on_transcript_progress)
@@ -273,18 +276,18 @@ class TranscriptionInterface(QWidget):
 
     finished = pyqtSignal(str, str)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
-        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setAttribute(Qt.WA_StyledBackground, True)  # type: ignore
         self.setAcceptDrops(True)
-        self.task = None
-        self.is_processing = False
+        self.task: Optional[TranscribeTask] = None
+        self.is_processing: bool = False
 
         self._init_ui()
         self._setup_signals()
         self._set_value()
 
-    def _init_ui(self):
+    def _init_ui(self) -> None:
         """初始化UI"""
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setObjectName("main_layout")
@@ -303,7 +306,7 @@ class TranscriptionInterface(QWidget):
     def _setup_command_bar(self):
         """设置命令栏"""
         self.command_bar = CommandBar(self)
-        self.command_bar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.command_bar.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)  # type: ignore
         self.command_bar.setFixedHeight(40)
 
         # 添加打开文件按钮
@@ -339,7 +342,7 @@ class TranscriptionInterface(QWidget):
 
         self.main_layout.addWidget(self.command_bar)
 
-    def _setup_signals(self):
+    def _setup_signals(self) -> None:
         """设置信号连接"""
         self.video_info_card.finished.connect(self._on_transcript_finished)
 
@@ -356,7 +359,7 @@ class TranscriptionInterface(QWidget):
             self.on_transcription_model_changed
         )
 
-    def _set_value(self):
+    def _set_value(self) -> None:
         """设置转录模型"""
         model_name = cfg.get(cfg.transcribe_model).value
         # self.model_button.setText(self.tr(model_name))
@@ -412,7 +415,7 @@ class TranscriptionInterface(QWidget):
         self.is_processing = False
         InfoBar.error(self.tr("错误"), self.tr(error_msg), duration=3000, parent=self)
 
-    def set_task(self, task: TranscribeTask):
+    def set_task(self, task: TranscribeTask) -> None:
         """设置任务并更新UI"""
         self.task = task
         self.video_info_card.set_task(self.task)
@@ -430,7 +433,6 @@ class TranscriptionInterface(QWidget):
     def dropEvent(self, event):
         """拖拽放下事件处理"""
         if self.is_processing:
-
             InfoBar.warning(
                 self.tr("警告"),
                 self.tr("正在处理中，请等待当前任务完成"),
@@ -463,8 +465,8 @@ class TranscriptionInterface(QWidget):
                 break
             else:
                 InfoBar.error(
-                    self.tr(f"格式错误") + file_ext,
-                    self.tr(f"请拖入音频或视频文件"),
+                    self.tr("格式错误") + file_ext,
+                    self.tr("请拖入音频或视频文件"),
                     duration=3000,
                     parent=self,
                 )
@@ -478,8 +480,8 @@ if __name__ == "__main__":
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
-    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
-    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)  # type: ignore
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)  # type: ignore
 
     app = QApplication(sys.argv)
     window = TranscriptionInterface()

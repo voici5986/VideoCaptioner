@@ -7,7 +7,6 @@ import yt_dlp
 from PyQt5.QtCore import QThread, pyqtSignal
 
 from app.config import APPDATA_PATH
-from app.core.entities import VideoInfo
 from app.core.utils.logger import setup_logger
 
 logger = setup_logger("video_download_thread")
@@ -153,12 +152,14 @@ class VideoDownloadThread(QThread):
 
             try:
                 subtitle_download_link = None
-                for l in info_dict["automatic_captions"]:
-                    if l.startswith(subtitle_language):
-                        subtitle_download_link = info_dict["automatic_captions"][l][-1][
-                            "url"
-                        ]
-                        break
+                automatic_captions = info_dict.get("automatic_captions")
+                if automatic_captions and subtitle_language:
+                    for lang_code in automatic_captions:
+                        if lang_code.startswith(subtitle_language):
+                            subtitle_download_link = automatic_captions[lang_code][-1][
+                                "url"
+                            ]
+                            break
             except Exception:
                 subtitle_download_link = None
 
