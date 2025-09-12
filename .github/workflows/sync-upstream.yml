@@ -34,30 +34,58 @@ jobs:
       run: |
         git fetch upstream
 
+    - name: Detect branches
+      id: detect_branches
+      run: |
+        # 检测当前分支
+        CURRENT_BRANCH=$(git branch --show-current)
+        echo "current_branch=$CURRENT_BRANCH" >> $GITHUB_OUTPUT
+        echo "当前分支: $CURRENT_BRANCH"
+        
+        # 检测上游默认分支
+        UPSTREAM_BRANCH=""
+        if git ls-remote --heads upstream | grep -q "refs/heads/master"; then
+          UPSTREAM_BRANCH="master"
+        elif git ls-remote --heads upstream | grep -q "refs/heads/main"; then
+          UPSTREAM_BRANCH="main"
+        else
+          echo "错误: 无法找到上游的 master 或 main 分支"
+          exit 1
+        fi
+        
+        echo "upstream_branch=$UPSTREAM_BRANCH" >> $GITHUB_OUTPUT
+        echo "上游分支: $UPSTREAM_BRANCH"
+
     - name: Check for changes
       id: check_changes
       run: |
         # 检查上游是否有新的提交
+        CURRENT_BRANCH="${{ steps.detect_branches.outputs.current_branch }}"
+        UPSTREAM_BRANCH="${{ steps.detect_branches.outputs.upstream_branch }}"
+        
         LOCAL=$(git rev-parse HEAD)
-        REMOTE=$(git rev-parse upstream/main)
+        REMOTE=$(git rev-parse upstream/$UPSTREAM_BRANCH)
+        
         if [ $LOCAL != $REMOTE ]; then
           echo "changes=true" >> $GITHUB_OUTPUT
-          echo "发现上游 VideoCaptioner 有新的更新"
+          echo "发现上游 VideoCaptioner ($UPSTREAM_BRANCH 分支) 有新的更新"
         else
           echo "changes=false" >> $GITHUB_OUTPUT
-          echo "上游 VideoCaptioner 没有新的更新"
+          echo "上游 VideoCaptioner ($UPSTREAM_BRANCH 分支) 没有新的更新"
         fi
 
     - name: Merge upstream changes
       if: steps.check_changes.outputs.changes == 'true'
       run: |
-        # 尝试自动合并上游的main分支
-        git merge upstream/main --no-edit
+        # 尝试自动合并上游分支
+        UPSTREAM_BRANCH="${{ steps.detect_branches.outputs.upstream_branch }}"
+        git merge upstream/$UPSTREAM_BRANCH --no-edit
         
     - name: Push changes
       if: steps.check_changes.outputs.changes == 'true'
       run: |
-        git push origin main
+        CURRENT_BRANCH="${{ steps.detect_branches.outputs.current_branch }}"
+        git push origin $CURRENT_BRANCH
         
     - name: Create Pull Request on conflict
       if: failure() && steps.check_changes.outputs.changes == 'true'
@@ -65,6 +93,7 @@ jobs:
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         branch: sync-upstream-videocaptioner-${{ github.run_number }}
+        base: ${{ steps.detect_branches.outputs.current_branch }}
         title: "同步 VideoCaptioner 上游仓库更新"
         body: |
           这是一个自动生成的PR，用于同步 VideoCaptioner 上游仓库的更新。
@@ -72,6 +101,7 @@ jobs:
           由于存在冲突，无法自动合并，请手动解决冲突后合并此PR。
           
           上游仓库: https://github.com/WEIFENG2333/VideoCaptioner
+          同步分支: ${{ steps.detect_branches.outputs.current_branch }} ← upstream/${{ steps.detect_branches.outputs.upstream_branch }}
           
           ## 更新内容
           请查看commits了解具体更新内容。
